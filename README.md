@@ -1,4 +1,4 @@
-# aligg tennery
+# aligg cafe
 
 Restore command, with the fooking mongo URI.
 ```shell
