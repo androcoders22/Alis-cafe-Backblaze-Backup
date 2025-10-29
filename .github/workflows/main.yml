@@ -25,7 +25,7 @@ jobs:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
           DATE=$(date -u +%d-%m-%y)
-          BACKUP_FILE="alig-tannery-mongo-backup-$DATE.gz"
+          BACKUP_FILE="ali-cafe-mongo-backup-$DATE.gz"
           mongodump --uri="$MONGO_URI" --gzip --archive="$BACKUP_FILE"
           echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
 
