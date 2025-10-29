@@ -1,4 +1,4 @@
-name: Alig-Tannery - MongoDB to Backblaze backup
+name: Alis-cafe - MongoDB to Backblaze backup
 
 on:
   workflow_dispatch:  # Manual trigger only for testing
