@@ -1,0 +1,44 @@
+name: Alig-Tannery - MongoDB to Backblaze backup
+
+on:
+  workflow_dispatch:  # Manual trigger only for testing
+  schedule:
+    - cron: '30 21 * * *'  # Runs every day at 3:00 AM IST (21:30 UTC)
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install MongoDB Database Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg
+          sudo mkdir -p /etc/apt/keyrings
+          wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg --dearmor -o /etc/apt/keyrings/mongodb.gpg
+          echo "deb [ arch=amd64,arm64 signed-by=/etc/apt/keyrings/mongodb.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools
+
+      - name: Create dated backup
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          DATE=$(date -u +%d-%m-%y)
+          BACKUP_FILE="alig-tannery-mongo-backup-$DATE.gz"
+          mongodump --uri="$MONGO_URI" --gzip --archive="$BACKUP_FILE"
+          echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
+
+      - name: Install Backblaze B2 CLI
+        run: pip3 install b2
+
+      - name: Upload to Backblaze B2
+        env:
+          B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
+        run: |
+          b2 upload-file "$B2_BUCKET_NAME" "$BACKUP_FILE" "$BACKUP_FILE"
+
+      - name: Cleanup
+        run: rm -f "$BACKUP_FILE"
