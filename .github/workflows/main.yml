@@ -1,14 +1,12 @@
 name: Alis-cafe - MongoDB to Backblaze backup
-
 on:
-  workflow_dispatch:  # Manual trigger only for testing
+  workflow_dispatch:
   schedule:
-    - cron: '30 21 * * *'  # Runs every day at 3:00 AM IST (21:30 UTC)
+    - cron: '30 19 * * *'  # Runs every day at 1:00 AM IST (19:30 UTC)
 
 jobs:
   backup:
     runs-on: ubuntu-latest
-
     steps:
       - name: Install MongoDB Database Tools
         run: |
@@ -24,7 +22,7 @@ jobs:
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
-          DATE=$(date -u +%d-%m-%y)
+          DATE=$(TZ="Asia/Kolkata" date +%d-%m-%y)
           BACKUP_FILE="ali-cafe-mongo-backup-$DATE.gz"
           mongodump --uri="$MONGO_URI" --gzip --archive="$BACKUP_FILE"
           echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
@@ -38,7 +36,52 @@ jobs:
           B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
           B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
         run: |
-          b2 upload-file "$B2_BUCKET_NAME" "$BACKUP_FILE" "$BACKUP_FILE"
+          b2 account authorize "$B2_APPLICATION_KEY_ID" "$B2_APPLICATION_KEY"
+          b2 file upload "$B2_BUCKET_NAME" "$BACKUP_FILE" "$BACKUP_FILE"
+
+      - name: Get backup file size
+        run: |
+          SIZE_BYTES=$(stat -c%s "$BACKUP_FILE")
+          SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $SIZE_BYTES/1048576}")
+          echo "BACKUP_SIZE=${SIZE_MB} MB" >> $GITHUB_ENV
+
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d "{
+            \"content\": \"MongoDB backup completed successfully.\",
+            \"username\": \"Androcoders22\",
+            \"avatar_url\": \"https://avatars.githubusercontent.com/u/114425197\",
+            \"embeds\": [
+              {
+                \"title\": \"$BACKUP_FILE\",
+                \"description\": \"Backup finished successfully and the archive was uploaded.\n\nStatus: Completed\nArchive size: $BACKUP_SIZE\nSource: MongoDB mongodump\nResult: Archive created, uploaded, and cleaned up after completion.\",
+                \"color\": 9489777,
+                \"fields\": [
+                  {
+                    \"name\": \"Status\",
+                    \"value\": \"Completed successfully\",
+                    \"inline\": true
+                  },
+                  {
+                    \"name\": \"Archive\",
+                    \"value\": \"$BACKUP_FILE\",
+                    \"inline\": true
+                  },
+                  {
+                    \"name\": \"Size\",
+                    \"value\": \"$BACKUP_SIZE\",
+                    \"inline\": true
+                  }
+                ]
+              }
+            ],
+            \"attachments\": []
+          }" \
+          "$DISCORD_WEBHOOK"
 
       - name: Cleanup
         run: rm -f "$BACKUP_FILE"
